@@ -37,6 +37,19 @@ export const AUDIO = {
   fireworks: '/audio/fireworks-swell.mp3',
 };
 
+/**
+ * Ambientes de tercera capa (loops cortos por tipo de lugar). Se reutilizan
+ * entre destinos vía audioMap → no hace falta uno único por ciudad.
+ */
+export const AMBIENCE = {
+  /** Olas/playa: filipinas, bali, phuket. */
+  beach: '/audio/amb-beach.mp3',
+  /** Bullicio urbano: macau, hanoi, beijing, seul, tokio, singapur. */
+  city: '/audio/amb-city.mp3',
+} as const;
+
+export type AmbienceKey = keyof typeof AMBIENCE;
+
 export function assetsFor(id: string): DestinoAssets {
   return ASSETS[id] ?? { hero: U('photo-1469474968028-56623f02e42e'), gallery: [] };
 }

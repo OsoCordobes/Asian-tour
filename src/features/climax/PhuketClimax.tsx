@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { Howl } from 'howler';
 import { motion } from 'framer-motion';
 import { useExperience } from '@/store/experience';
 import { KineticText } from '@/components/ui/KineticText';
-import { CLIMAX_VIDEO } from '@/data/assets';
+import { CLIMAX_VIDEO, AUDIO } from '@/data/assets';
 
 /**
  * El beat clímax: Phuket, 31 de diciembre. Tensión -> estallido -> resolución.
@@ -11,9 +12,13 @@ import { CLIMAX_VIDEO } from '@/data/assets';
  */
 export function PhuketClimax() {
   const reducedMotion = useExperience((s) => s.caps.reducedMotion);
+  const audioUnlocked = useExperience((s) => s.audioUnlocked);
+  const muted = useExperience((s) => s.muted);
   const [burst, setBurst] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const swellRef = useRef<Howl | null>(null);
+  const playedSwell = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -29,6 +34,24 @@ export function PhuketClimax() {
     );
     obs.observe(el);
     return () => obs.disconnect();
+  }, []);
+
+  // Swell de fuegos artificiales: una sola vez al entrar la sección, si el gate
+  // está abierto y no está silenciado. Fade-in corto sobre la música ambiente.
+  useEffect(() => {
+    if (!burst || playedSwell.current || !audioUnlocked || muted) return;
+    playedSwell.current = true;
+    const swell = new Howl({ src: [AUDIO.fireworks], volume: 0, html5: true });
+    swellRef.current = swell;
+    swell.play();
+    swell.fade(0, 0.5, 800);
+  }, [burst, audioUnlocked, muted]);
+
+  useEffect(() => {
+    return () => {
+      swellRef.current?.unload();
+      swellRef.current = null;
+    };
   }, []);
 
   return (
