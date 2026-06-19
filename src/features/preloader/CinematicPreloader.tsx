@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useExperience } from '@/store/experience';
 import { CUBIC } from '@/lib/motion';
@@ -13,12 +13,8 @@ export function CinematicPreloader() {
   const reducedMotion = useExperience((s) => s.caps.reducedMotion);
   const [count, setCount] = useState(0);
   const [done, setDone] = useState(false);
-  const startedRef = useRef(false);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
     if (reducedMotion) {
       setCount(100);
       setDone(true);
@@ -26,9 +22,12 @@ export function CinematicPreloader() {
       return;
     }
 
+    // Sin guard de "ya empezó": bajo StrictMode el efecto corre dos veces; la
+    // limpieza cancela RAF + timeout y el segundo setup re-arranca limpio.
     const duration = 2200;
     const start = performance.now();
     let raf = 0;
+    let timeout = 0;
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - t, 3);
@@ -36,14 +35,17 @@ export function CinematicPreloader() {
       if (t < 1) {
         raf = requestAnimationFrame(tick);
       } else {
-        setTimeout(() => {
+        timeout = window.setTimeout(() => {
           setDone(true);
           finishPreloader();
         }, 450);
       }
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timeout);
+    };
   }, [finishPreloader, reducedMotion]);
 
   return (

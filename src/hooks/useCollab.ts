@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { nanoid } from 'nanoid';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { toEUR } from '@/data/rates';
 import type { Moneda, Nota, Persona, Precio } from '@/types';
@@ -89,7 +88,7 @@ export function useCollab(tripId: string | undefined, persona: Persona | null) {
     async (texto: string, destino_id?: string) => {
       if (!tripId || !persona || !texto.trim()) return;
       const nota: Nota = {
-        id: nanoid(),
+        id: crypto.randomUUID(),
         trip_id: tripId,
         destino_id: destino_id ?? null,
         autor_id: persona.id,
@@ -113,7 +112,7 @@ export function useCollab(tripId: string | undefined, persona: Persona | null) {
     async (input: { tramo_id: string; monto: number; moneda: Moneda; fuente?: string }) => {
       if (!tripId || !persona || !input.monto) return;
       const precio: Precio = {
-        id: nanoid(),
+        id: crypto.randomUUID(),
         trip_id: tripId,
         tramo_id: input.tramo_id,
         autor_id: persona.id,

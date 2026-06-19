@@ -101,26 +101,43 @@ $$;
 
 grant execute on function public.get_trip_by_slug(text) to anon;
 
--- Child tables: NUNCA using(true). La fila debe pertenecer a un trip existente.
--- Como `trips` no es enumerable y el UUID no es adivinable, en la práctica solo
--- opera quien tiene el slug. El borrado es SOFT (update de deleted_at); no se
--- otorga delete a anon.
+-- Chequeo de existencia de trip para las policies. DEBE ser security definer:
+-- como `trips` tiene RLS y anon no tiene select, una subconsulta inline contra
+-- `public.trips` dentro de una policy se evalúa como anon y ve 0 filas (todo
+-- denegaría). La función bypassa esa RLS sin exponer enumeración (no devuelve
+-- datos del trip, solo un booleano por id ya conocido).
+create or replace function public.trip_exists(p_trip_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = ''
+stable
+as $$
+  select exists (select 1 from public.trips t where t.id = p_trip_id);
+$$;
+
+grant execute on function public.trip_exists(uuid) to anon;
+
+-- Child tables: NUNCA using(true). La fila debe pertenecer a un trip existente
+-- (vía trip_exists). Como `trips` no es enumerable y el UUID no es adivinable,
+-- en la práctica solo opera quien tiene el slug. El borrado es SOFT (update de
+-- deleted_at); no se otorga delete a anon.
 do $$
 declare tbl text;
 begin
   foreach tbl in array array['personas','notas','precios'] loop
     execute format('drop policy if exists %I_select on public.%I', tbl, tbl);
     execute format($f$create policy %I_select on public.%I for select to anon
-      using (exists (select 1 from public.trips t where t.id = trip_id))$f$, tbl, tbl);
+      using (public.trip_exists(trip_id))$f$, tbl, tbl);
 
     execute format('drop policy if exists %I_insert on public.%I', tbl, tbl);
     execute format($f$create policy %I_insert on public.%I for insert to anon
-      with check (exists (select 1 from public.trips t where t.id = trip_id))$f$, tbl, tbl);
+      with check (public.trip_exists(trip_id))$f$, tbl, tbl);
 
     execute format('drop policy if exists %I_update on public.%I', tbl, tbl);
     execute format($f$create policy %I_update on public.%I for update to anon
-      using (exists (select 1 from public.trips t where t.id = trip_id))
-      with check (exists (select 1 from public.trips t where t.id = trip_id))$f$, tbl, tbl);
+      using (public.trip_exists(trip_id))
+      with check (public.trip_exists(trip_id))$f$, tbl, tbl);
   end loop;
 end $$;
 

@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { create } from 'zustand';
-import { nanoid } from 'nanoid';
 import type { Persona } from '@/types';
 
 const KEY = 'asia-persona';
@@ -50,7 +49,7 @@ export function usePersona() {
 
   const elegir = useCallback(
     (nombre: string, color: string) => {
-      setPersona({ id: nanoid(), nombre: nombre.trim().slice(0, 24), color });
+      setPersona({ id: crypto.randomUUID(), nombre: nombre.trim().slice(0, 24), color });
     },
     [setPersona],
   );

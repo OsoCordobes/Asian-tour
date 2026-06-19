@@ -45,6 +45,13 @@ export function PlaneoDrawer({ open, onClose, tripId, destinoId }: Props) {
     [notas, destinoId],
   );
 
+  // Solo precios de tramos de la ruta activa: si se cargó un precio de un tramo
+  // exclusivo de 45 y se cambia a 30, no debe contar en el presupuesto.
+  const preciosVisibles = useMemo(
+    () => precios.filter((p) => tramos.some((t) => t.id === p.tramo_id)),
+    [precios, tramos],
+  );
+
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
@@ -147,9 +154,9 @@ export function PlaneoDrawer({ open, onClose, tripId, destinoId }: Props) {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <BudgetTally precios={precios} />
+                  <BudgetTally precios={preciosVisibles} />
                   <PrecioComposer persona={persona} tramos={tramos} onAdd={addPrecio} />
-                  <PrecioList precios={precios} />
+                  <PrecioList precios={preciosVisibles} />
                 </div>
               )}
             </div>
