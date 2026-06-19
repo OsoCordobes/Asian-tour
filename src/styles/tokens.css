@@ -1,0 +1,40 @@
+/**
+ * Design tokens. La paleta neón se expresa como triples RGB (espacios) para
+ * que Tailwind pueda hacer `rgb(var(--neon-1) / <alpha>)`. El eje de temperatura
+ * (warm -> cold) se interpola por JS seteando estas vars en :root según el
+ * progreso de scroll (ver useTemperature).
+ */
+:root {
+  /* Base obsidiana */
+  --obsidian: 8 8 11;
+
+  /* Neón — arranca CÁLIDO (sudeste asiático) */
+  --neon-1: 255 64 160; /* magenta atardecer */
+  --neon-2: 64 224 255; /* cian */
+  --neon-3: 255 196 84; /* dorado */
+
+  /* Intensidad de glow y niebla (0..1 escalado por el clímax / región) */
+  --glow: 0.45;
+  --fog: 0.04;
+
+  /* Vidrio */
+  --glass: 18 18 26;
+  --glass-border: 255 255 255;
+}
+
+/* Endpoints de referencia (los usa useTemperature para interpolar) */
+:root {
+  --warm-1: 255 64 160;
+  --warm-2: 64 224 255;
+  --warm-3: 255 196 84;
+
+  --cold-1: 138 120 255; /* violeta-azul */
+  --cold-2: 120 200 255; /* azul glacial */
+  --cold-3: 226 240 255; /* blanco glacial */
+}
+
+html {
+  background: rgb(var(--obsidian));
+  color: #e9e9f0;
+  color-scheme: dark;
+}

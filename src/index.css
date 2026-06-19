@@ -1,0 +1,57 @@
+@import './styles/tokens.css';
+@import './styles/glass.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body,
+  #root {
+    margin: 0;
+    min-height: 100%;
+  }
+  body {
+    font-family: theme('fontFamily.sans');
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: theme('fontFamily.display');
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  ::selection {
+    background: rgb(var(--neon-1) / 0.4);
+  }
+}
+
+@layer utilities {
+  .full-svh {
+    height: 100svh;
+  }
+  .min-svh {
+    min-height: 100svh;
+  }
+  /* Oculta scrollbar pero mantiene scroll. */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+}
+
+/* Cursor custom desktop: ocultamos el nativo solo cuando hay puntero fino. */
+@media (pointer: fine) {
+  .custom-cursor-active,
+  .custom-cursor-active * {
+    cursor: none;
+  }
+}
