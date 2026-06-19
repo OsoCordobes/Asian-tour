@@ -38,14 +38,31 @@ export const AUDIO = {
 };
 
 /**
- * Ambientes de tercera capa (loops cortos por tipo de lugar). Se reutilizan
- * entre destinos vía audioMap → no hace falta uno único por ciudad.
+ * Ambientes de tercera capa (loops cortos). Cada destino tiene su grabación de
+ * campo característica (ciudades con idioma local audible; playas con olas).
+ * `beach`/`city` quedan como fallback genérico para destinos sin clip propio.
+ * Ver public/audio/CREDITS.md para fuente + licencia de cada archivo.
  */
 export const AMBIENCE = {
-  /** Olas/playa: filipinas, bali, phuket. */
+  /** Olas/playa genérico — fallback de destinos costeros (filipinas, bali). */
   beach: '/audio/amb-beach.mp3',
-  /** Bullicio urbano: macau, hanoi, beijing, seul, tokio, singapur. */
+  /** Bullicio urbano genérico — fallback de destinos no costeros. */
   city: '/audio/amb-city.mp3',
+
+  /** Calle de Macau (Avenida da Amizade), cantonés de fondo. */
+  macau: '/audio/amb-macau.mp3',
+  /** Lenin Park, Hanoi — gente y vietnamita. */
+  hanoi: '/audio/amb-hanoi.mp3',
+  /** Mercado de ropa cubierto, Beijing — mandarín. */
+  beijing: '/audio/amb-beijing.mp3',
+  /** Galería comercial subterránea, Seúl — coreano. */
+  seul: '/audio/amb-seul.mp3',
+  /** Calle de Akihabara, Tokio — japonés. */
+  tokio: '/audio/amb-tokio.mp3',
+  /** Lavender food square, Singapur — bullicio mixto inglés/mandarín. */
+  singapur: '/audio/amb-singapur.mp3',
+  /** Tubkaek Beach, mar de Andamán — olas suaves (Phuket). */
+  phuket: '/audio/amb-phuket.mp3',
 } as const;
 
 export type AmbienceKey = keyof typeof AMBIENCE;

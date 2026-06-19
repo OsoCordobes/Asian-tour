@@ -5,6 +5,8 @@ import { NeonChip } from '@/components/ui/NeonChip';
 import { KineticText } from '@/components/ui/KineticText';
 import { BlurUpImage } from '@/components/fx/BlurUpImage';
 import { assetsFor } from '@/data/assets';
+import { PLANES } from '@/data/planes';
+import { PlanDeck } from './PlanDeck';
 import { CUBIC } from '@/lib/motion';
 
 interface Props {
@@ -58,6 +60,8 @@ export function DestinoPanel({ destino, ruta, index, onOpenDeck }: Props) {
               <NeonChip key={b} badge={b} index={i} bright={destino.esClimax} />
             ))}
           </div>
+
+          <PlanDeck planes={PLANES[destino.id] ?? []} destinoId={destino.id} />
 
           {destino.visa && (
             <p className="text-xs text-white/40">
