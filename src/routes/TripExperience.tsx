@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTrip } from '@/hooks/useTrip';
 import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 import { useTemperature } from '@/hooks/useTemperature';
@@ -7,7 +7,6 @@ import { Hero } from '@/features/hero/Hero';
 import { JourneyScroll } from '@/features/journey/JourneyScroll';
 import { RouteToggle } from '@/features/journey/RouteToggle';
 import { AudioProvider } from '@/features/audio/AudioProvider';
-import { PlaneoDrawer } from '@/features/planeo/PlaneoDrawer';
 import { CustomCursor } from '@/components/fx/CustomCursor';
 import { ScrollProgress } from '@/components/fx/ScrollProgress';
 import { AudioToggle } from '@/components/ui/AudioToggle';
@@ -15,21 +14,15 @@ import { AudioToggle } from '@/components/ui/AudioToggle';
 export function TripExperience() {
   const { slug } = useParams<{ slug: string }>();
   const { trip, loading, notFound } = useTrip(slug);
-  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
 
   useSmoothScroll();
   useTemperature();
 
-  const deckId = params.get('destino') ?? undefined;
+  // Abrir el planeo ya no es un drawer: navega a la sala dedicada, enfocando el
+  // destino tocado vía query. JourneyScroll mantiene la firma (id) => void.
   const openDeck = (id: string) => {
-    const next = new URLSearchParams(params);
-    next.set('destino', id);
-    setParams(next, { replace: false });
-  };
-  const closeDeck = () => {
-    const next = new URLSearchParams(params);
-    next.delete('destino');
-    setParams(next, { replace: true });
+    navigate(`/viaje/${slug}/planeo?destino=${id}`);
   };
 
   if (notFound) {
@@ -55,17 +48,25 @@ export function TripExperience() {
       <div className="fixed bottom-4 right-4 z-40">
         <AudioToggle />
       </div>
+      {/* Acceso persistente a la sala de planeo (espejo del AudioToggle) */}
+      <div className="fixed bottom-4 left-4 z-40">
+        <button
+          type="button"
+          data-cursor="hover"
+          aria-label="Sala de planeo"
+          title="Sala de planeo"
+          onClick={() => navigate(`/viaje/${slug}/planeo`)}
+          className="glass flex h-11 items-center gap-2 rounded-full px-4 text-sm text-white transition hover:brightness-125 active:scale-95"
+        >
+          <span aria-hidden>📝</span>
+          <span className="font-display">Planeo</span>
+        </button>
+      </div>
 
       {!loading && trip && (
         <>
           <Hero />
           <JourneyScroll onOpenDeck={openDeck} />
-          <PlaneoDrawer
-            open={Boolean(deckId)}
-            onClose={closeDeck}
-            tripId={trip.id}
-            destinoId={deckId}
-          />
         </>
       )}
     </main>

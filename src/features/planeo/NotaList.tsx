@@ -6,13 +6,18 @@ import { CUBIC } from '@/lib/motion';
 
 interface Props {
   notas: Nota[];
+  /**
+   * En modo chat (PlaneoView) las notas vienen en orden ascendente (viejo→nuevo)
+   * y las nuevas entran desde abajo en lugar de desde la izquierda.
+   */
+  ascending?: boolean;
 }
 
 /**
  * Lista de notas atribuidas por color de autor. Las nuevas entran con un pulso
  * suave teñido del color de quien las escribió.
  */
-export function NotaList({ notas }: Props) {
+export function NotaList({ notas, ascending = false }: Props) {
   const reducedMotion = useExperience((s) => s.caps.reducedMotion);
 
   if (notas.length === 0) {
@@ -24,6 +29,9 @@ export function NotaList({ notas }: Props) {
     );
   }
 
+  const enterX = ascending ? 0 : -16;
+  const enterY = ascending ? 12 : 0;
+
   return (
     <ul className="space-y-3">
       <AnimatePresence initial={false}>
@@ -34,7 +42,7 @@ export function NotaList({ notas }: Props) {
             initial={
               reducedMotion
                 ? { opacity: 0 }
-                : { opacity: 0, x: -16, boxShadow: `0 0 0px ${nota.autor_color}00` }
+                : { opacity: 0, x: enterX, y: enterY, boxShadow: `0 0 0px ${nota.autor_color}00` }
             }
             animate={
               reducedMotion
@@ -42,13 +50,14 @@ export function NotaList({ notas }: Props) {
                 : {
                     opacity: 1,
                     x: 0,
+                    y: 0,
                     boxShadow: [
                       `0 0 24px ${nota.autor_color}60`,
                       `0 0 0px ${nota.autor_color}00`,
                     ],
                   }
             }
-            exit={{ opacity: 0, x: 16 }}
+            exit={{ opacity: 0, x: ascending ? 0 : 16 }}
             transition={{ duration: reducedMotion ? 0.15 : 0.6, ease: CUBIC.land }}
             className="relative rounded-xl bg-white/[0.03] py-3 pl-4 pr-3"
             style={{ borderLeft: `3px solid ${nota.autor_color}` }}

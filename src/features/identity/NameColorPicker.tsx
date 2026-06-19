@@ -8,13 +8,16 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   onDone?: () => void;
+  /** 'modal' = overlay a pantalla completa (default). 'inline' = bloque compacto dentro del flujo. */
+  variant?: 'modal' | 'inline';
 }
 
 /**
- * Modal de identidad liviana. Aparece cuando todavía no hay persona elegida.
- * Pide nombre + color, muestra un preview kinético y entra al viaje.
+ * Identidad liviana. En variante 'modal' aparece como overlay cuando todavía no
+ * hay persona elegida. En variante 'inline' se integra al flujo (sala de planeo)
+ * sin tapar la pantalla. Pide nombre + color y confirma la identidad.
  */
-export function NameColorPicker({ onDone }: Props) {
+export function NameColorPicker({ onDone, variant = 'modal' }: Props) {
   const { elegir } = usePersona();
   const reducedMotion = useExperience((s) => s.caps.reducedMotion);
   const [nombre, setNombre] = useState('');
@@ -27,6 +30,83 @@ export function NameColorPicker({ onDone }: Props) {
     if (!valido) return;
     elegir(limpio, color);
     onDone?.();
+  }
+
+  if (variant === 'inline') {
+    return (
+      <motion.div
+        initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reducedMotion ? 0.1 : 0.4, ease: CUBIC.land }}
+        className="glass grain rounded-2xl p-4"
+      >
+        <p className="font-sans text-xs uppercase tracking-[0.25em] text-white/40">
+          ¿Quién sos en este viaje?
+        </p>
+        <p className="mt-1 font-sans text-sm text-white/50">
+          Tu nombre y color te identifican en notas y precios.
+        </p>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="block flex-1">
+            <span className="font-sans text-[11px] uppercase tracking-widest text-white/40">
+              Tu nombre
+            </span>
+            <input
+              autoFocus
+              value={nombre}
+              maxLength={24}
+              onChange={(e) => setNombre(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') entrar();
+              }}
+              placeholder="Lautaro"
+              className="mt-1.5 w-full rounded-xl bg-white/5 px-4 py-2.5 font-sans text-sm text-white placeholder-white/25 outline-none transition focus:bg-white/10"
+              style={{ boxShadow: `inset 0 0 0 1px ${color}66` }}
+            />
+          </label>
+          <motion.button
+            type="button"
+            disabled={!valido}
+            onClick={entrar}
+            whileTap={valido ? { scale: 0.97 } : undefined}
+            className={cn(
+              'shrink-0 rounded-xl px-5 py-2.5 font-display text-sm text-obsidian transition',
+              valido ? 'cursor-pointer' : 'cursor-not-allowed opacity-40',
+            )}
+            style={{
+              backgroundColor: color,
+              boxShadow: valido && !reducedMotion ? `0 0 18px ${color}80` : undefined,
+            }}
+          >
+            Listo
+          </motion.button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2.5">
+          {PERSONA_COLORS.map((c, i) => {
+            const activo = c === color;
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                aria-label={`Color ${i + 1}`}
+                aria-pressed={activo}
+                className={cn(
+                  'h-7 w-7 rounded-full transition',
+                  activo ? 'ring-2 ring-white ring-offset-2 ring-offset-obsidian' : 'opacity-70',
+                )}
+                style={{
+                  backgroundColor: c,
+                  boxShadow: activo ? `0 0 14px ${c}` : undefined,
+                }}
+              />
+            );
+          })}
+        </div>
+      </motion.div>
+    );
   }
 
   return (

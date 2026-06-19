@@ -27,7 +27,7 @@ export function RouteMap({ ruta, activeIndex }: Props) {
 
   return (
     <Suspense fallback={<RouteMapStatic ruta={ruta} activeIndex={activeIndex} />}>
-      <RouteMapMapbox ruta={ruta} activeIndex={activeIndex} tier={tier} />
+      <RouteMapMapbox ruta={ruta} tier={tier} />
     </Suspense>
   );
 }
