@@ -17,11 +17,11 @@ const U = (id: string) =>
 
 export const ASSETS: Record<string, DestinoAssets> = {
   macau: { hero: U('photo-1555212697-194d092e3b8f'), gallery: [] },
-  hanoi: { hero: U('photo-1509030450996-dd1a26dda341'), gallery: [] },
+  hanoi: { hero: U('photo-1613131145282-9476375618e1'), gallery: [] },
   filipinas: { hero: U('photo-1518509562904-e7ef99cdcc86'), gallery: [] },
-  bali: { hero: U('photo-1537953773345-d172ccd13da7'), gallery: [] },
+  bali: { hero: U('photo-1662879567074-9a8b3e6364b7'), gallery: [] },
   singapur: { hero: U('photo-1525625293386-3f8f99389edd'), gallery: [] },
-  phuket: { hero: U('photo-1589394760882-8e5d6a3c33ad'), gallery: [] },
+  phuket: { hero: U('photo-1641546373508-635403c24289'), gallery: [] },
   beijing: { hero: U('photo-1508804185872-d7badad00f7d'), gallery: [] },
   seul: { hero: U('photo-1538485399081-7191377e8241'), gallery: [] },
   tokio: { hero: U('photo-1540959733332-eab4deabeeaf'), gallery: [] },

@@ -100,23 +100,23 @@ export function AudioProvider() {
 
     const unsub = useExperience.subscribe((state) => {
       if (!state.audioUnlocked) return;
-      const { phase, mixFrom, mixTo, mixT, stop } = state.frame;
+      const { phase, mixFrom, mixTo, mixT, pais } = state.frame;
 
-      if (phase === 'travel') {
-        // equal-power: mantiene el loudness percibido constante en el cruce.
+      if (phase === 'inter') {
+        // crossfade equal-power entre el ambiente del país que dejás y el próximo.
         setVol(ensure(mixFrom), AMB_VOL * Math.cos((mixT * Math.PI) / 2));
         setVol(ensure(mixTo), AMB_VOL * Math.sin((mixT * Math.PI) / 2));
       } else {
-        setVol(ensure(stop), AMB_VOL);
+        // intra / hold: ambiente fijo del país (ciudades comparten paisaje sonoro).
+        setVol(ensure(pais), AMB_VOL);
       }
 
-      // Silenciar el resto + LRU (descargar los lejanos al stop actual).
+      // Silenciar el resto + LRU (descargar los lejanos al país actual).
       ambCache.current.forEach((h, idx) => {
-        const keep =
-          phase === 'travel' ? idx === mixFrom || idx === mixTo : idx === stop;
+        const keep = phase === 'inter' ? idx === mixFrom || idx === mixTo : idx === pais;
         if (keep) return;
         setVol(h, 0);
-        if (Math.abs(idx - stop) >= 2) {
+        if (Math.abs(idx - pais) >= 2) {
           h.unload();
           ambCache.current.delete(idx);
         }

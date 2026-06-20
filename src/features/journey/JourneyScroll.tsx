@@ -3,7 +3,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useExperience } from '@/store/experience';
 import { destinosDeRuta } from '@/data/itinerario';
-import { resolveFrame, useJourneyStops } from '@/hooks/useJourneyStops';
+import { resolveFrame5, useJourneyStops } from '@/hooks/useJourneyStops';
 import { RouteMap } from '@/features/map/RouteMap';
 import { PhuketClimax } from '@/features/climax/PhuketClimax';
 import { DestinoSection } from './DestinoSection';
@@ -27,7 +27,7 @@ export function JourneyScroll({ onOpenDeck }: Props) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Modelo de PARADAS (premium / lite con Mapbox)                              */
+/* Dos niveles (premium / lite con Mapbox)                                    */
 /* -------------------------------------------------------------------------- */
 function JourneyStops({ onOpenDeck }: Props) {
   const ruta = useExperience((s) => s.ruta);
@@ -35,20 +35,18 @@ function JourneyStops({ onOpenDeck }: Props) {
   const setJourneyProgress = useExperience((s) => s.setJourneyProgress);
   const setActiveDestino = useExperience((s) => s.setActiveDestino);
   const isClimax = useExperience((s) => s.frame.isClimax);
-  const activeIndex = useExperience((s) => s.frame.stop);
+  const activeIndex = useExperience((s) => s.frame.pais);
 
   const destinos = useMemo(() => destinosDeRuta(ruta), [ruta]);
   const plan = useJourneyStops(destinos);
   const sectionRef = useRef<HTMLElement>(null);
-  const prevStop = useRef(-1);
+  const prevPais = useRef(-1);
 
-  // Anclar el primer destino al montar (temperatura/audio).
   useEffect(() => {
     if (destinos[0]) setActiveDestino(destinos[0].id);
-    prevStop.current = 0;
+    prevPais.current = 0;
   }, [destinos, setActiveDestino]);
 
-  // Scroll → frame (cámara + card + audio). Se recrea al togglear 30/45.
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
@@ -57,12 +55,12 @@ function JourneyStops({ onOpenDeck }: Props) {
       start: 'top top',
       end: 'bottom bottom',
       onUpdate: (self) => {
-        const frame = resolveFrame(plan, self.progress);
+        const frame = resolveFrame5(plan, self.progress);
         setFrame(frame);
         setJourneyProgress(self.progress);
-        if (frame.stop !== prevStop.current) {
-          prevStop.current = frame.stop;
-          const d = destinos[frame.stop];
+        if (frame.pais !== prevPais.current) {
+          prevPais.current = frame.pais;
+          const d = destinos[frame.pais];
           if (d) setActiveDestino(d.id);
         }
       },
@@ -81,9 +79,15 @@ function JourneyStops({ onOpenDeck }: Props) {
       >
         <div className="sticky top-0 h-svh w-full overflow-hidden">
           <RouteMap ruta={ruta} activeIndex={activeIndex} />
+          {/* Tinte oscuro sobre el satélite (mood obsidiana + legibilidad) */}
+          <div className="pointer-events-none absolute inset-0 bg-obsidian/45" />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ background: 'radial-gradient(120% 90% at 50% 50%, transparent 40%, rgb(8 8 11 / 0.65) 100%)' }}
+          />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-obsidian to-transparent" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-obsidian to-transparent" />
-          <DestinoCardOverlay destinos={destinos} ruta={ruta} onOpenDeck={onOpenDeck} />
+          <DestinoCardOverlay plan={plan} destinos={destinos} ruta={ruta} onOpenDeck={onOpenDeck} />
           {isClimax && <PhuketClimax asOverlay />}
         </div>
       </section>
@@ -93,7 +97,7 @@ function JourneyStops({ onOpenDeck }: Props) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Fallback DISCRETO (tier static: reduced-motion / sin WebGL / saveData)     */
+/* Fallback DISCRETO (tier static)                                            */
 /* -------------------------------------------------------------------------- */
 function JourneyStatic({ onOpenDeck }: Props) {
   const ruta = useExperience((s) => s.ruta);

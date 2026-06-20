@@ -36,12 +36,26 @@ export type Moneda =
   | 'SGD'
   | 'USD';
 
+/** Una ciudad dentro de un país (modelo de dos niveles). */
+export interface Ciudad {
+  id: string;
+  nombre: string;
+  /** [lng, lat] — GeoJSON / Mapbox order. */
+  coords: [number, number];
+  /** 1-2 frases de qué haríamos en esta ciudad. */
+  blurb: string;
+  /** Foto real de alta calidad (Unsplash/Pexels). */
+  img: string;
+}
+
 export interface Destino {
   id: string;
   nombre: string;
   pais: string;
-  /** [lng, lat] — GeoJSON / Mapbox order. */
+  /** [lng, lat] — GeoJSON / Mapbox order. Coincide con la 1ª ciudad. */
   coords: [number, number];
+  /** Ciudades del país, en orden de recorrido (la 1ª ≈ coords). */
+  ciudades: Ciudad[];
   badges: BadgeId[];
   highlights: string[];
   /** Chip informativo de visa (pasaporte UE). */

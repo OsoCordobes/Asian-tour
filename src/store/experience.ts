@@ -31,11 +31,14 @@ interface ExperienceState {
 }
 
 const INITIAL_FRAME: JourneyFrame = {
-  stop: 0,
+  pais: 0,
+  ciudadGlobalIndex: 0,
   phase: 'hold',
   r: 0,
   holdAmount: 0,
-  travelAmount: 0,
+  cameraMode: 'fixed',
+  camTarget: { center: [113.5439, 22.1987], zoom: 4 },
+  camArc: 0,
   mixFrom: 0,
   mixTo: 0,
   mixT: 0,
