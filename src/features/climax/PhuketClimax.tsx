@@ -7,10 +7,12 @@ import { CLIMAX_VIDEO, AUDIO } from '@/data/assets';
 
 /**
  * El beat clímax: Phuket, 31 de diciembre. Tensión -> estallido -> resolución.
- * Video de fuegos (poster -> video, muted+playsInline) + capa de partículas CSS
- * que estalla cuando la sección entra. El audio sube si el gate está abierto.
+ * Video de fuegos (poster -> video, muted+playsInline) + capa de partículas CSS.
+ * `asOverlay` (modelo de paradas): se monta durante el hold de Phuket, ocupa la
+ * pantalla sobre el mapa y estalla al montar. Sin `asOverlay` (fallback estático):
+ * es una sección en el flujo que estalla al entrar al viewport.
  */
-export function PhuketClimax() {
+export function PhuketClimax({ asOverlay = false }: { asOverlay?: boolean }) {
   const reducedMotion = useExperience((s) => s.caps.reducedMotion);
   const audioUnlocked = useExperience((s) => s.audioUnlocked);
   const muted = useExperience((s) => s.muted);
@@ -21,6 +23,11 @@ export function PhuketClimax() {
   const playedSwell = useRef(false);
 
   useEffect(() => {
+    if (asOverlay) {
+      setBurst(true);
+      videoRef.current?.play().catch(() => {});
+      return;
+    }
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
@@ -34,7 +41,7 @@ export function PhuketClimax() {
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [asOverlay]);
 
   // Swell de fuegos artificiales: una sola vez al entrar la sección, si el gate
   // está abierto y no está silenciado. Fade-in corto sobre la música ambiente.
@@ -55,10 +62,17 @@ export function PhuketClimax() {
   }, []);
 
   return (
-    <section
+    <motion.div
       ref={ref}
-      className="relative flex min-svh items-center justify-center overflow-hidden"
       data-act="climax"
+      className={
+        asOverlay
+          ? 'absolute inset-0 z-20 flex items-center justify-center overflow-hidden'
+          : 'relative flex min-svh items-center justify-center overflow-hidden'
+      }
+      initial={asOverlay ? { opacity: 0 } : false}
+      animate={asOverlay ? { opacity: 1 } : undefined}
+      transition={{ duration: 0.8 }}
     >
       {/* Video de fuegos (si existe el archivo; si no, el fondo de partículas manda) */}
       <video
@@ -132,6 +146,6 @@ export function PhuketClimax() {
           el mundo empieza a enfriarse.
         </motion.p>
       </div>
-    </section>
+    </motion.div>
   );
 }

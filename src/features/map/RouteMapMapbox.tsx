@@ -8,7 +8,6 @@ import {
   cumulativeFractions,
   drawLineGeoJSON,
   headingAt,
-  indexFloat,
   interpAlongNodes,
   revealFraction,
   routeDrawCoords,
@@ -38,6 +37,7 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
   const coordsRef = useRef<LngLat[]>(routeDrawCoords(ruta));
   const cumRef = useRef<number[]>(cumulativeFractions(coordsRef.current));
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const lastRevealRef = useRef(-1);
   const premium = tier === 'premium';
 
   // --- Init (una vez por cambio de tier) -----------------------------------
@@ -123,7 +123,7 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
       });
 
       readyRef.current = true;
-      applyProgress(useExperience.getState().journeyProgress);
+      applyFrame(useExperience.getState().frame);
     });
 
     // Marcadores pulsantes por destino.
@@ -144,37 +144,48 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tier]);
 
-  // --- Trazado + cámara imperativos (sin re-render por tick) ----------------
-  function applyProgress(progress: number) {
+  // --- Trazado + cámara imperativos, dirigidos por el frame de paradas ------
+  function applyFrame(frame: { r: number; holdAmount: number; stop: number }) {
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     const coords = coordsRef.current;
-    const r = indexFloat(progress, coords.length);
+    const r = Math.min(frame.r, coords.length - 1);
     const reveal = revealFraction(cumRef.current, r);
     const head = interpAlongNodes(coords, r);
 
-    // line-trim-offset oculta [reveal, 1] → muestra [0, reveal].
-    const trim: [number, number] = [Math.min(reveal, 1), 1];
-    map.setPaintProperty('route-draw', 'line-trim-offset', trim);
-    map.setPaintProperty('route-draw-glow', 'line-trim-offset', trim);
+    // Dedupe: en el hold `reveal` no cambia → no reescribir la línea ni el cometa.
+    if (Math.abs(reveal - lastRevealRef.current) > 1e-4) {
+      lastRevealRef.current = reveal;
+      const trim: [number, number] = [Math.min(reveal, 1), 1];
+      map.setPaintProperty('route-draw', 'line-trim-offset', trim);
+      map.setPaintProperty('route-draw-glow', 'line-trim-offset', trim);
+      (map.getSource('comet') as mapboxgl.GeoJSONSource | undefined)?.setData({
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'Point', coordinates: head },
+      });
+    }
 
-    (map.getSource('comet') as mapboxgl.GeoJSONSource | undefined)?.setData({
-      type: 'Feature',
-      properties: {},
-      geometry: { type: 'Point', coordinates: head },
-    });
+    // Cámara: push de "llegada" (zoom in) modulado por holdAmount; bearing y
+    // pitch se relajan al detenerse. Padding empuja el destino al lado opuesto
+    // de la card para que el vidrio no lo tape.
+    const ease = 1 - Math.pow(1 - frame.holdAmount, 3); // easeOutCubic
+    const zoom = (premium ? 4.7 : 4) + (premium ? 0.9 : 0.6) * ease;
+    const leftCard = frame.stop % 2 === 0;
+    const pad = premium ? 360 * frame.holdAmount : 0;
 
     map.jumpTo({
       center: head,
-      zoom: premium ? 4.7 : 4,
-      pitch: premium ? 52 : 0,
-      bearing: premium ? headingAt(coords, r) * 0.4 : 0,
+      zoom,
+      pitch: premium ? 50 + 6 * ease : 0,
+      bearing: premium ? headingAt(coords, r) * 0.4 * (1 - frame.holdAmount) : 0,
+      padding: { top: 0, bottom: 0, left: leftCard ? pad : 0, right: leftCard ? 0 : pad },
     });
   }
 
   useEffect(() => {
     const unsub = useExperience.subscribe((state) => {
-      applyProgress(state.journeyProgress);
+      applyFrame(state.frame);
     });
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,6 +195,7 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
   useEffect(() => {
     coordsRef.current = routeDrawCoords(ruta);
     cumRef.current = cumulativeFractions(coordsRef.current);
+    lastRevealRef.current = -1; // forzar redibujo tras cambiar los datos
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     (map.getSource('route-full') as mapboxgl.GeoJSONSource | undefined)?.setData(routeGeoJSON(ruta));
@@ -195,7 +207,7 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
         'width:10px;height:10px;border-radius:9999px;background:#ffc454;box-shadow:0 0 8px #ffc454,0 0 16px #ff40a0;';
       return new mapboxgl.Marker({ element: el }).setLngLat([p.lng, p.lat]).addTo(map);
     });
-    applyProgress(useExperience.getState().journeyProgress);
+    applyFrame(useExperience.getState().frame);
   }, [ruta]);
 
   // --- Fog teñido por temperatura (región del destino activo) ---------------

@@ -1,39 +1,48 @@
 import { useEffect, useRef } from 'react';
 import { Howl, Howler } from 'howler';
 import { useExperience } from '@/store/experience';
-import { DESTINOS_BY_ID } from '@/data/itinerario';
+import { DESTINOS_BY_ID, destinosDeRuta } from '@/data/itinerario';
 import { AUDIO } from '@/data/assets';
 import { ambienceSrcFor } from './audioMap';
+import type { Destino } from '@/types';
 
 /**
- * Beds ambiente por región con crossfade (warm <-> cold) y swell en el clímax.
- * Solo arranca tras el gate de auriculares (audioUnlocked). Howl usa html5 para
- * streaming y no reventar memoria en mobile. Si los archivos no existen, falla
- * en silencio — el audio es enhancement.
- *
- * Capas:
- *  1-2. Beds warm/cold (música ambiente, vol ~0.3) que crossfadean por región.
- *  3.   Ambiente por destino (olas/ciudad, vol ~0.2) que fade-out/in al cambiar
- *       de destino, por debajo de la música.
+ * Audio del Acto 2. Tres capas, tras el gate de auriculares:
+ *  1-2. Beds warm/cold (música, SUTIL) que crossfadean por región — colchón de
+ *       continuidad.
+ *  3.   Ambiente real por destino (PROTAGONISTA): durante el VIAJE entre i→i+1
+ *       hace un crossfade equal-power continuo dirigido por el scroll; en la
+ *       PARADA suena solo el ambiente de ese destino. Cache de Howls + LRU para
+ *       no crear/destruir por tick. (iOS Safari ignora volume() en <audio>: ahí
+ *       el crossfade degrada a discreto, aceptable — desktop-primary.)
  */
 
-const BED_VOL = 0.3;
-const AMB_VOL = 0.2;
-const FADE_MS = 1800;
+const BED_VOL = 0.22;
+const AMB_VOL = 0.32;
+const REGION_FADE_MS = 1800;
 
 export function AudioProvider() {
   const audioUnlocked = useExperience((s) => s.audioUnlocked);
   const muted = useExperience((s) => s.muted);
   const activeDestino = useExperience((s) => s.activeDestino);
+  const ruta = useExperience((s) => s.ruta);
 
   const warmRef = useRef<Howl | null>(null);
   const coldRef = useRef<Howl | null>(null);
   const currentRegion = useRef<'sudeste' | 'norte' | null>(null);
 
-  // Capa de ambiente por destino.
-  const ambRef = useRef<Howl | null>(null);
-  const ambSrc = useRef<string | null>(null);
+  // Ambiente por destino: cache index → Howl.
+  const ambCache = useRef<Map<number, Howl>>(new Map());
+  const destinosRef = useRef<Destino[]>(destinosDeRuta(ruta));
 
+  // Mantener la lista de destinos y limpiar el cache al togglear 30/45.
+  useEffect(() => {
+    destinosRef.current = destinosDeRuta(ruta);
+    ambCache.current.forEach((h) => h.unload());
+    ambCache.current.clear();
+  }, [ruta]);
+
+  // Arranque tras el gate.
   useEffect(() => {
     if (!audioUnlocked) return;
     warmRef.current = new Howl({ src: [AUDIO.bedWarm], loop: true, volume: 0, html5: true });
@@ -43,12 +52,11 @@ export function AudioProvider() {
     return () => {
       warmRef.current?.unload();
       coldRef.current?.unload();
-      ambRef.current?.unload();
+      ambCache.current.forEach((h) => h.unload());
+      ambCache.current.clear();
       warmRef.current = null;
       coldRef.current = null;
-      ambRef.current = null;
       currentRegion.current = null;
-      ambSrc.current = null;
     };
   }, [audioUnlocked]);
 
@@ -56,42 +64,66 @@ export function AudioProvider() {
     Howler.mute(muted);
   }, [muted]);
 
-  // Crossfade de beds warm/cold por región.
+  // Crossfade de beds warm/cold por región (sutil).
   useEffect(() => {
     if (!audioUnlocked || !activeDestino) return;
     const region = DESTINOS_BY_ID[activeDestino]?.region ?? 'sudeste';
     if (region === currentRegion.current) return;
     currentRegion.current = region;
+    const warm = warmRef.current;
+    const cold = coldRef.current;
     if (region === 'sudeste') {
-      warmRef.current?.fade(warmRef.current.volume(), BED_VOL, FADE_MS);
-      coldRef.current?.fade(coldRef.current.volume(), 0, FADE_MS);
+      warm?.fade(warm.volume(), BED_VOL, REGION_FADE_MS);
+      cold?.fade(cold.volume(), 0, REGION_FADE_MS);
     } else {
-      coldRef.current?.fade(coldRef.current.volume(), BED_VOL, FADE_MS);
-      warmRef.current?.fade(warmRef.current.volume(), 0, FADE_MS);
+      cold?.fade(cold.volume(), BED_VOL, REGION_FADE_MS);
+      warm?.fade(warm.volume(), 0, REGION_FADE_MS);
     }
   }, [activeDestino, audioUnlocked]);
 
-  // Tercera capa: ambiente por destino (olas/ciudad), por debajo de la música.
+  // Capa de ambiente: crossfade scroll-driven (suscripción imperativa al frame).
   useEffect(() => {
-    if (!audioUnlocked || !activeDestino) return;
-    const destino = DESTINOS_BY_ID[activeDestino];
-    if (!destino) return;
-    const nextSrc = ambienceSrcFor(destino);
-    if (nextSrc === ambSrc.current) return;
-
-    const previous = ambRef.current;
-    if (previous) {
-      // Fade-out del ambiente anterior y descarga al terminar.
-      previous.fade(previous.volume(), 0, FADE_MS);
-      previous.once('fade', () => previous.unload());
+    function ensure(idx: number): Howl | null {
+      const d = destinosRef.current[idx];
+      if (!d) return null;
+      let h = ambCache.current.get(idx);
+      if (!h) {
+        h = new Howl({ src: [ambienceSrcFor(d)], loop: true, volume: 0, html5: true });
+        h.play();
+        ambCache.current.set(idx, h);
+      }
+      return h;
+    }
+    function setVol(h: Howl | null, v: number) {
+      if (h && Math.abs(h.volume() - v) > 0.005) h.volume(v);
     }
 
-    ambSrc.current = nextSrc;
-    const next = new Howl({ src: [nextSrc], loop: true, volume: 0, html5: true });
-    next.play();
-    next.fade(0, AMB_VOL, FADE_MS);
-    ambRef.current = next;
-  }, [activeDestino, audioUnlocked]);
+    const unsub = useExperience.subscribe((state) => {
+      if (!state.audioUnlocked) return;
+      const { phase, mixFrom, mixTo, mixT, stop } = state.frame;
+
+      if (phase === 'travel') {
+        // equal-power: mantiene el loudness percibido constante en el cruce.
+        setVol(ensure(mixFrom), AMB_VOL * Math.cos((mixT * Math.PI) / 2));
+        setVol(ensure(mixTo), AMB_VOL * Math.sin((mixT * Math.PI) / 2));
+      } else {
+        setVol(ensure(stop), AMB_VOL);
+      }
+
+      // Silenciar el resto + LRU (descargar los lejanos al stop actual).
+      ambCache.current.forEach((h, idx) => {
+        const keep =
+          phase === 'travel' ? idx === mixFrom || idx === mixTo : idx === stop;
+        if (keep) return;
+        setVol(h, 0);
+        if (Math.abs(idx - stop) >= 2) {
+          h.unload();
+          ambCache.current.delete(idx);
+        }
+      });
+    });
+    return unsub;
+  }, []);
 
   return null;
 }
