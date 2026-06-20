@@ -165,3 +165,17 @@ export function cityToNode(cityNodeIdx: number[], rCity: number): number {
   if (i >= cityNodeIdx.length - 1) return cityNodeIdx[cityNodeIdx.length - 1];
   return cityNodeIdx[i] + f * (cityNodeIdx[i + 1] - cityNodeIdx[i]);
 }
+
+/** Punto a la fracción `frac` de la LONGITUD de la polilínea (arc-length). Así el
+ * cometa queda pegado exactamente a la punta del trazo (misma parametrización que
+ * line-trim-offset, que también es por longitud). */
+export function pointAtFraction(nodes: LngLat[], cum: number[], frac: number): LngLat {
+  const f = Math.min(1, Math.max(0, frac));
+  let i = 0;
+  while (i < cum.length - 2 && cum[i + 1] < f) i++;
+  const seg = Math.max(cum[i + 1] - cum[i], 1e-9);
+  const t = (f - cum[i]) / seg;
+  const a = nodes[i];
+  const b = nodes[i + 1] ?? a;
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}

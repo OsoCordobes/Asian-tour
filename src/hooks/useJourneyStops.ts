@@ -54,7 +54,9 @@ const INTER_SVH = 64;
 const INTRA_SVH = 34;
 const HOLD_PROT = 78;
 const HOLD_SEC = 48;
-const NEUTRO_PAD = { top: 90, right: 130, bottom: 110, left: 130 };
+// Padding simétrico amplio: el país queda enmarcado hacia el centro, dejando
+// los laterales para las cards (que aparecen alternadas) sobre un mapa quieto.
+const NEUTRO_PAD = { top: 96, right: 200, bottom: 130, left: 200 };
 
 function smooth(t: number): number {
   const x = Math.min(1, Math.max(0, t));

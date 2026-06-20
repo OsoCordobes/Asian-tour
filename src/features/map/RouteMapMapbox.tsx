@@ -4,9 +4,16 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import type { RutaId, Tier } from '@/types';
 import { useExperience } from '@/store/experience';
 import { DESTINOS_BY_ID, destinosDeRuta } from '@/data/itinerario';
-import { headingAt, interpAlongNodes, revealFraction } from './routeGeo';
-import { buildGlobalRoute, cityToNode, type GlobalRoute } from './routeGeoV5';
-import type { JourneyFrame } from '@/hooks/useJourneyStops';
+import { headingAt, revealFraction } from './routeGeo';
+import {
+  buildGlobalRoute,
+  cityToNode,
+  mercX,
+  mercY,
+  mercYToLat,
+  pointAtFraction,
+  type GlobalRoute,
+} from './routeGeoV5';
 
 interface Props {
   ruta: RutaId;
@@ -14,23 +21,29 @@ interface Props {
 }
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
+const TAU_CAM = 0.14; // s — constante de tiempo cámara
+const TAU_LINE = 0.1; // s — línea/cometa (más responsivo)
+const TRAIL = 0.05; // fracción de línea como cola del cometa
+
+interface CamState {
+  cmx: number;
+  cmy: number;
+  zoom: number;
+  pitch: number;
+  bearing: number;
+  reveal: number;
+}
 
 function lineGeoJSON(route: GlobalRoute): GeoJSON.Feature<GeoJSON.LineString> {
   return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: route.nodes } };
 }
 
-function makeMarker(map: mapboxgl.Map, coords: [number, number]): mapboxgl.Marker {
-  const el = document.createElement('div');
-  el.style.cssText =
-    'width:9px;height:9px;border-radius:9999px;background:#ffc454;box-shadow:0 0 7px #ffc454,0 0 14px #ff40a0;';
-  return new mapboxgl.Marker({ element: el }).setLngLat(coords).addTo(map);
-}
-
 /**
- * Mapa satélite con coreografía de DOS NIVELES. La cámara aplica `frame.camTarget`
- * (fly entre encuadres de país en 'inter', fijo en el encuadre del país en
- * 'intra'/'hold'); la línea se traza por `r` (índice de ciudad → nodo). Glow
- * pulsante decorativo por rAF. Suscripción imperativa al store (sin re-render).
+ * Mapa satélite, coreografía de dos niveles. El render está DESACOPLADO del
+ * scroll: la suscripción al store solo escribe `target`; un rAF único lleva
+ * `displayed → target` con suavizado exponencial (filtro de 1er orden, sin
+ * overshoot) y lo aplica con jumpTo. Cometa alineado por arc-length (mismo
+ * parámetro que la línea) + cola. Sin padding dinámico → mapa quieto en cada país.
  */
 export default function RouteMapMapbox({ ruta, tier }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,23 +51,68 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
   const readyRef = useRef(false);
   const routeRef = useRef<GlobalRoute>(buildGlobalRoute(destinosDeRuta(ruta)));
   const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const lastRevealRef = useRef(-1);
   const rafRef = useRef(0);
   const premium = tier === 'premium';
 
-  function applyFrame(frame: JourneyFrame) {
+  const target = useRef<CamState>({ cmx: 0, cmy: 0, zoom: 4, pitch: 0, bearing: 0, reveal: 0 });
+  const disp = useRef<CamState>({ ...target.current });
+  const lastApplied = useRef<CamState>({ cmx: -999, cmy: 0, zoom: 0, pitch: 0, bearing: 0, reveal: -1 });
+  const initedTarget = useRef(false);
+  const lastTimeRef = useRef(0);
+
+  function writeTarget() {
+    const f = useExperience.getState().frame;
+    const { nodes, cum, cityNodeIdx } = routeRef.current;
+    const nodeIdx = cityToNode(cityNodeIdx, f.r);
+    target.current.cmx = mercX(f.camTarget.center[0]);
+    target.current.cmy = mercY(f.camTarget.center[1]);
+    target.current.zoom = f.camTarget.zoom;
+    target.current.pitch = premium ? 33 + 17 * f.camArc : 0;
+    target.current.bearing =
+      premium && f.cameraMode !== 'fixed' ? headingAt(nodes, nodeIdx) * 0.35 : 0;
+    target.current.reveal = revealFraction(cum, nodeIdx);
+    if (!initedTarget.current) {
+      disp.current = { ...target.current };
+      initedTarget.current = true;
+    }
+  }
+
+  function applyDisplayed(now: number) {
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
-    const { nodes, cum, cityNodeIdx } = routeRef.current;
-    const nodeIdx = cityToNode(cityNodeIdx, frame.r);
-    const reveal = revealFraction(cum, nodeIdx);
-    const head = interpAlongNodes(nodes, nodeIdx);
+    const d = disp.current;
+    const la = lastApplied.current;
 
-    if (Math.abs(reveal - lastRevealRef.current) > 1e-4) {
-      lastRevealRef.current = reveal;
-      const trim: [number, number] = [Math.min(reveal, 1), 1];
-      map.setPaintProperty('route-draw', 'line-trim-offset', trim);
-      map.setPaintProperty('route-draw-glow', 'line-trim-offset', trim);
+    const camMoved =
+      Math.abs(d.cmx - la.cmx) > 1e-6 ||
+      Math.abs(d.cmy - la.cmy) > 1e-6 ||
+      Math.abs(d.zoom - la.zoom) > 1e-4 ||
+      Math.abs(d.pitch - la.pitch) > 1e-3 ||
+      Math.abs(d.bearing - la.bearing) > 1e-3;
+
+    if (camMoved) {
+      map.jumpTo({
+        center: [d.cmx * 360 - 180, mercYToLat(d.cmy)],
+        zoom: d.zoom,
+        pitch: d.pitch,
+        bearing: d.bearing,
+        padding: { top: 0, bottom: 0, left: 0, right: 0 },
+      });
+      la.cmx = d.cmx;
+      la.cmy = d.cmy;
+      la.zoom = d.zoom;
+      la.pitch = d.pitch;
+      la.bearing = d.bearing;
+    }
+
+    if (Math.abs(d.reveal - la.reveal) > 2e-5) {
+      la.reveal = d.reveal;
+      const r = Math.min(1, Math.max(0, d.reveal));
+      map.setPaintProperty('route-draw', 'line-trim-offset', [r, 1]);
+      map.setPaintProperty('route-draw-glow', 'line-trim-offset', [r, 1]);
+      map.setPaintProperty('route-trail', 'line-trim-offset', [Math.max(0, r - TRAIL), r]);
+      const { nodes, cum } = routeRef.current;
+      const head = pointAtFraction(nodes, cum, r);
       (map.getSource('comet') as mapboxgl.GeoJSONSource | undefined)?.setData({
         type: 'Feature',
         properties: {},
@@ -62,27 +120,43 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
       });
     }
 
-    const fixed = frame.cameraMode === 'fixed';
-    const pad = fixed ? frame.holdAmount * 360 : 0;
-    const leftCard = frame.pais % 2 === 0;
-    map.jumpTo({
-      center: frame.camTarget.center,
-      zoom: frame.camTarget.zoom,
-      pitch: premium ? 33 + 17 * frame.camArc : 0,
-      bearing: premium && !fixed ? headingAt(nodes, nodeIdx) * 0.35 : 0,
-      padding: { top: 0, bottom: 0, left: leftCard ? pad : 0, right: leftCard ? 0 : pad },
-    });
+    // Pulso decorativo del glow + cabeza del cometa.
+    const pulse = 0.42 + 0.16 * Math.sin(now * 0.003);
+    map.setPaintProperty('route-draw-glow', 'line-opacity', pulse);
+    map.setPaintProperty('comet-glow', 'circle-radius', 12 + 2.5 * Math.sin(now * 0.004));
+  }
+
+  function tick(now: number) {
+    const last = lastTimeRef.current || now;
+    lastTimeRef.current = now;
+    const dt = Math.min(0.05, (now - last) / 1000);
+    const kc = 1 - Math.exp(-dt / TAU_CAM);
+    const kl = 1 - Math.exp(-dt / TAU_LINE);
+    const d = disp.current;
+    const t = target.current;
+    d.cmx += (t.cmx - d.cmx) * kc;
+    d.cmy += (t.cmy - d.cmy) * kc;
+    d.zoom += (t.zoom - d.zoom) * kc;
+    d.pitch += (t.pitch - d.pitch) * kc;
+    // bearing por el camino corto
+    let db = t.bearing - d.bearing;
+    while (db > 180) db -= 360;
+    while (db < -180) db += 360;
+    d.bearing += db * kc;
+    d.reveal += (t.reveal - d.reveal) * kl;
+    if (Math.abs(t.reveal - d.reveal) < 5e-4) d.reveal = t.reveal; // mata la asíntota
+    applyDisplayed(now);
+    rafRef.current = requestAnimationFrame(tick);
   }
 
   function addLayers(map: mapboxgl.Map) {
-    const data = lineGeoJSON(routeRef.current);
-    map.addSource('route-draw', { type: 'geojson', lineMetrics: true, data });
+    map.addSource('route-draw', { type: 'geojson', lineMetrics: true, data: lineGeoJSON(routeRef.current) });
     map.addLayer({
       id: 'route-full',
       type: 'line',
       source: 'route-draw',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#ffffff', 'line-opacity': 0.12, 'line-width': 1.3, 'line-dasharray': [1, 3] },
+      paint: { 'line-color': '#ffffff', 'line-opacity': 0.1, 'line-width': 1.2, 'line-dasharray': [1, 3] },
     });
     map.addLayer({
       id: 'route-draw-glow',
@@ -90,54 +164,48 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
       source: 'route-draw',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-gradient': [
-          'interpolate',
-          ['linear'],
-          ['line-progress'],
-          0, 'rgb(255,64,160)',
-          1, 'rgb(255,196,84)',
-        ],
-        'line-width': 9,
+        'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, 'rgb(255,64,160)', 1, 'rgb(255,196,84)'],
+        'line-width': 8,
         'line-blur': 12,
         'line-opacity': 0.5,
         'line-trim-offset': [0, 0],
       },
     });
     map.addLayer({
+      id: 'route-trail',
+      type: 'line',
+      source: 'route-draw',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': 'rgb(255,224,150)', 'line-width': 5, 'line-blur': 6, 'line-opacity': 0.85, 'line-trim-offset': [0, 0] },
+    });
+    map.addLayer({
       id: 'route-draw',
       type: 'line',
       source: 'route-draw',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': 'rgb(255,236,180)', 'line-width': 2.4, 'line-trim-offset': [0, 0] },
+      paint: { 'line-color': 'rgb(255,238,190)', 'line-width': 2.2, 'line-trim-offset': [0, 0] },
     });
     map.addSource('comet', {
       type: 'geojson',
       data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: routeRef.current.nodes[0] } },
     });
-    map.addLayer({
-      id: 'comet-glow',
-      type: 'circle',
-      source: 'comet',
-      paint: { 'circle-radius': 13, 'circle-color': 'rgb(255,196,84)', 'circle-blur': 1, 'circle-opacity': 0.5 },
-    });
-    map.addLayer({
-      id: 'comet',
-      type: 'circle',
-      source: 'comet',
-      paint: { 'circle-radius': 4.5, 'circle-color': '#fff' },
-    });
+    map.addLayer({ id: 'comet-glow', type: 'circle', source: 'comet', paint: { 'circle-radius': 12, 'circle-color': 'rgb(255,200,90)', 'circle-blur': 1, 'circle-opacity': 0.55 } });
+    map.addLayer({ id: 'comet', type: 'circle', source: 'comet', paint: { 'circle-radius': 4.5, 'circle-color': '#fff' } });
   }
 
   function addMarkers(map: mapboxgl.Map) {
     markersRef.current.forEach((m) => m.remove());
-    markersRef.current = routeRef.current.cities.map((c) => makeMarker(map, c.coords));
+    markersRef.current = routeRef.current.cities.map((c) => {
+      const el = document.createElement('div');
+      el.style.cssText =
+        'width:8px;height:8px;border-radius:9999px;background:#ffd27a;box-shadow:0 0 6px #ffc454,0 0 12px #ff40a0;';
+      return new mapboxgl.Marker({ element: el }).setLngLat(c.coords).addTo(map);
+    });
   }
 
-  // --- Init (por cambio de tier) -------------------------------------------
   useEffect(() => {
     if (!TOKEN || !containerRef.current) return;
     mapboxgl.accessToken = TOKEN;
-
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: 'mapbox://styles/mapbox/satellite-streets-v12',
@@ -159,22 +227,26 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
         'horizon-blend': 0.12,
         'star-intensity': premium ? 0.55 : 0.2,
       });
-      // Atenuar labels para mantener el mood (sin romper el contexto).
       map.getStyle().layers?.forEach((l) => {
         if (l.type === 'symbol') {
           try {
-            map.setPaintProperty(l.id, 'text-opacity', 0.35);
-            map.setPaintProperty(l.id, 'icon-opacity', 0.2);
+            map.setPaintProperty(l.id, 'text-opacity', 0.3);
+            map.setPaintProperty(l.id, 'icon-opacity', 0.15);
           } catch {
-            /* algunas capas no aceptan estas props */
+            /* noop */
           }
         }
       });
       addLayers(map);
       addMarkers(map);
+      initedTarget.current = false;
+      writeTarget();
+      disp.current = { ...target.current };
+      lastApplied.current.reveal = -1;
       readyRef.current = true;
-      applyFrame(useExperience.getState().frame);
     });
+
+    rafRef.current = requestAnimationFrame(tick);
 
     return () => {
       readyRef.current = false;
@@ -187,38 +259,22 @@ export default function RouteMapMapbox({ ruta, tier }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tier]);
 
-  // --- Suscripción al frame -------------------------------------------------
-  useEffect(() => useExperience.subscribe((s) => applyFrame(s.frame)), []);
+  // Suscripción: solo actualiza el TARGET (el rAF lo persigue).
+  useEffect(() => useExperience.subscribe(() => writeTarget()), []);
 
-  // --- Glow pulsante decorativo (única animación temporizada) ----------------
-  useEffect(() => {
-    const tick = (now: number) => {
-      const map = mapRef.current;
-      if (map && readyRef.current) {
-        try {
-          map.setPaintProperty('route-draw-glow', 'line-opacity', 0.42 + 0.16 * Math.sin(now * 0.003));
-        } catch {
-          /* layer aún no lista */
-        }
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
-
-  // --- Toggle 30/45: rehacer geometría + markers ----------------------------
+  // Toggle 30/45: rehacer geometría + markers + snap.
   useEffect(() => {
     routeRef.current = buildGlobalRoute(destinosDeRuta(ruta));
-    lastRevealRef.current = -1;
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     (map.getSource('route-draw') as mapboxgl.GeoJSONSource | undefined)?.setData(lineGeoJSON(routeRef.current));
     addMarkers(map);
-    applyFrame(useExperience.getState().frame);
+    writeTarget();
+    disp.current = { ...target.current };
+    lastApplied.current.reveal = -1;
   }, [ruta]);
 
-  // --- Fog teñido por temperatura -------------------------------------------
+  // Fog teñido por temperatura.
   useEffect(
     () =>
       useExperience.subscribe((s) => {

@@ -36,15 +36,15 @@ export function CiudadCard({ ciudad, destino, esPrimaria, ruta, onOpenDeck }: Pr
         </motion.div>
         <div className="absolute inset-0 bg-gradient-to-t from-obsidian via-obsidian/30 to-transparent" />
         <div className="absolute bottom-3 left-4 right-4">
-          <p className="text-xs uppercase tracking-[0.3em] text-neon-2">{destino.pais}</p>
-          <h2 className="text-3xl text-white sm:text-4xl">
+          <p className="text-legible text-xs uppercase tracking-[0.3em] text-neon-2">{destino.pais}</p>
+          <h2 className="text-legible text-3xl text-white sm:text-4xl">
             <KineticText text={ciudad.nombre} whileInView={false} />
           </h2>
         </div>
       </div>
 
       <div className="space-y-4 p-5">
-        <p className="text-sm leading-relaxed text-white/75">{ciudad.blurb}</p>
+        <p className="text-legible text-sm leading-relaxed text-white/80">{ciudad.blurb}</p>
 
         {esPrimaria ? (
           <>
@@ -66,7 +66,7 @@ export function CiudadCard({ ciudad, destino, esPrimaria, ruta, onOpenDeck }: Pr
                     hidden: { opacity: 0, y: -8 },
                     show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: CUBIC.land } },
                   }}
-                  className="flex items-start gap-2 text-sm text-white/80"
+                  className="text-legible flex items-start gap-2 text-sm text-white/85"
                 >
                   <span
                     className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-neon-1"
