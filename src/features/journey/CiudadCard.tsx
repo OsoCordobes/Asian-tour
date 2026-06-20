@@ -25,7 +25,7 @@ export function CiudadCard({ ciudad, destino, esPrimaria, ruta, onOpenDeck }: Pr
 
   return (
     <GlassPanel glow={destino.esClimax} className="overflow-hidden">
-      <div className="relative h-44 w-full overflow-hidden sm:h-52">
+      <div className="relative h-32 w-full overflow-hidden sm:h-40">
         <motion.div
           initial={{ scale: 1.12 }}
           animate={{ scale: 1 }}
@@ -35,16 +35,27 @@ export function CiudadCard({ ciudad, destino, esPrimaria, ruta, onOpenDeck }: Pr
           <BlurUpImage src={ciudad.img} alt={ciudad.nombre} />
         </motion.div>
         <div className="absolute inset-0 bg-gradient-to-t from-obsidian via-obsidian/30 to-transparent" />
-        <div className="absolute bottom-3 left-4 right-4">
-          <p className="text-legible text-xs uppercase tracking-[0.3em] text-neon-2">{destino.pais}</p>
-          <h2 className="text-legible text-3xl text-white sm:text-4xl">
+        {destino.esClimax && (
+          <motion.span
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: CUBIC.land }}
+            className="neon-border absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-obsidian/60 px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-wider text-white"
+            style={{ filter: 'brightness(1.35)' }}
+          >
+            <span aria-hidden>🎆</span> 31 Dic · Año Nuevo 2026
+          </motion.span>
+        )}
+        <div className="absolute bottom-2.5 left-4 right-4">
+          <p className="text-legible text-[0.65rem] uppercase tracking-[0.3em] text-neon-2">{destino.pais}</p>
+          <h2 className="text-legible text-2xl text-white sm:text-3xl">
             <KineticText text={ciudad.nombre} whileInView={false} />
           </h2>
         </div>
       </div>
 
-      <div className="space-y-4 p-5">
-        <p className="text-legible text-sm leading-relaxed text-white/80">{ciudad.blurb}</p>
+      <div className="space-y-3 p-4">
+        <p className="text-legible line-clamp-3 text-sm leading-relaxed text-white/80">{ciudad.blurb}</p>
 
         {esPrimaria ? (
           <>

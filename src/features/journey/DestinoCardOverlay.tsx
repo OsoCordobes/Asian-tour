@@ -42,7 +42,8 @@ export function DestinoCardOverlay({ plan, destinos, ruta, onOpenDeck }: Props) 
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   const dispR = useRef(lo);
-  const gate = useRef(1);
+  const gate = useRef(0);
+  const env = useRef(0);
 
   useEffect(() => {
     let raf = 0;
@@ -54,7 +55,7 @@ export function DestinoCardOverlay({ plan, destinos, ruta, onOpenDeck }: Props) 
         el.style.pointerEvents = 'none';
         return;
       }
-      const op = smoothstep(1 - Math.abs(dispR.current - city) / CROSS) * gate.current;
+      const op = smoothstep(1 - Math.abs(dispR.current - city) / CROSS) * gate.current * env.current;
       el.style.opacity = String(op);
       el.style.transform = `translateY(-50%) translateX(${dir * (1 - op) * 44}px)`;
       el.style.filter = `blur(${(1 - op) * 6}px)`;
@@ -63,12 +64,19 @@ export function DestinoCardOverlay({ plan, destinos, ruta, onOpenDeck }: Props) 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - (last || now)) / 1000);
       last = now;
-      const f = useExperience.getState().frame;
+      const st = useExperience.getState();
+      const f = st.frame;
+      const jp = st.journeyProgress;
       const kR = 1 - Math.exp(-dt / 0.1);
       const kG = 1 - Math.exp(-dt / 0.2);
       dispR.current += (f.r - dispR.current) * kR;
-      const gateTarget = f.phase === 'inter' || f.isClimax ? 0 : 1;
+      // Gate: sin card durante viaje entre países ni en el zoom-out final.
+      const gateTarget = f.phase === 'inter' || f.phase === 'outro' ? 0 : 1;
       gate.current += (gateTarget - gate.current) * kG;
+      // Envelope global: la 1ª card ENTRA con la cadencia del scroll (no queda
+      // fija desde el hero) y todo se va al acercarse el cierre.
+      const envTarget = smoothstep(jp / 0.018) * smoothstep((1 - jp) / 0.05);
+      env.current += (envTarget - env.current) * kG;
       apply(leftRef.current, evenCity, -1);
       apply(rightRef.current, oddCity, +1);
       raf = requestAnimationFrame(tick);
@@ -86,7 +94,7 @@ export function DestinoCardOverlay({ plan, destinos, ruta, onOpenDeck }: Props) 
     return (
       <div
         ref={ref}
-        className={`absolute top-1/2 w-[min(92vw,420px)] ${side === 'left' ? 'left-6 md:left-16' : 'right-6 md:right-16'}`}
+        className={`absolute top-1/2 max-h-[88svh] w-[min(90vw,384px)] overflow-hidden ${side === 'left' ? 'left-4 md:left-14' : 'right-4 md:right-14'}`}
         style={{ opacity: 0, transform: 'translateY(-50%)' }}
       >
         <CiudadCard

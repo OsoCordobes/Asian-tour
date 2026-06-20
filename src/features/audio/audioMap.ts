@@ -11,8 +11,21 @@ import { AMBIENCE, type AmbienceKey } from '@/data/assets';
 /** Destinos costeros explícitos (refuerzan el badge `playa`). */
 const BEACH_IDS = new Set(['filipinas', 'bali', 'phuket']);
 
+/**
+ * Override de fallback por país, para países sin clip propio. Clave: que dos
+ * países VECINOS nunca compartan el mismo archivo (si no, al cruzar de uno a
+ * otro el sonido "no cambia") y que al menos uno aporte voces/idioma. Filipinas
+ * (Manila + Boracay) usa el bullicio urbano con voces; Bali se queda con olas.
+ */
+const FALLBACK_OVERRIDE: Record<string, AmbienceKey> = {
+  filipinas: 'city',
+  bali: 'beach',
+};
+
 /** Genérico de fallback cuando el destino no tiene clip propio en AMBIENCE. */
 export function ambienceKeyFor(destino: Destino): AmbienceKey {
+  const override = FALLBACK_OVERRIDE[destino.id];
+  if (override) return override;
   if (BEACH_IDS.has(destino.id) || destino.badges.includes('playa')) {
     return 'beach';
   }

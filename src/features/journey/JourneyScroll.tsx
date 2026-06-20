@@ -34,7 +34,6 @@ function JourneyStops({ onOpenDeck }: Props) {
   const setFrame = useExperience((s) => s.setFrame);
   const setJourneyProgress = useExperience((s) => s.setJourneyProgress);
   const setActiveDestino = useExperience((s) => s.setActiveDestino);
-  const isClimax = useExperience((s) => s.frame.isClimax);
   const activeIndex = useExperience((s) => s.frame.pais);
 
   const destinos = useMemo(() => destinosDeRuta(ruta), [ruta]);
@@ -88,10 +87,8 @@ function JourneyStops({ onOpenDeck }: Props) {
           <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-obsidian to-transparent" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-obsidian to-transparent" />
           <DestinoCardOverlay plan={plan} destinos={destinos} ruta={ruta} onOpenDeck={onOpenDeck} />
-          {isClimax && <PhuketClimax asOverlay />}
         </div>
       </section>
-      <Cierre />
     </>
   );
 }

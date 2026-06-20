@@ -8,7 +8,7 @@ import {
   type GlobalRoute,
 } from '@/features/map/routeGeoV5';
 
-export type JourneyPhase = 'inter' | 'intra' | 'hold';
+export type JourneyPhase = 'inter' | 'intra' | 'hold' | 'outro';
 
 /** Frame que consumen mapa, card y audio (vía store). */
 export interface JourneyFrame {
@@ -45,6 +45,8 @@ export interface JourneyPlan {
   segments: Segment5[];
   totalSvh: number;
   paisBounds: CamFrame[];
+  /** Encuadre final: todo el recorrido a la vista (zoom out del cierre). */
+  globalBounds: CamFrame;
   route: GlobalRoute;
   nPaises: number;
   nCiudades: number;
@@ -54,9 +56,12 @@ const INTER_SVH = 64;
 const INTRA_SVH = 34;
 const HOLD_PROT = 78;
 const HOLD_SEC = 48;
+const OUTRO_SVH = 120;
 // Padding simétrico amplio: el país queda enmarcado hacia el centro, dejando
 // los laterales para las cards (que aparecen alternadas) sobre un mapa quieto.
 const NEUTRO_PAD = { top: 96, right: 200, bottom: 130, left: 200 };
+// Cierre: encuadre generoso para que entre todo el arco Macau→Tokio.
+const OUTRO_PAD = { top: 90, right: 90, bottom: 110, left: 90 };
 
 function smooth(t: number): number {
   const x = Math.min(1, Math.max(0, t));
@@ -80,6 +85,14 @@ export function buildPlan5(
     const coords = route.cities.slice(rg.firstCity, rg.lastCity + 1).map((c) => c.coords);
     return fitBoundsFrame(coords, viewport, NEUTRO_PAD, { maxZoom: 5.4, minZoom: 2.6 });
   });
+
+  // Encuadre del cierre: todas las ciudades a la vista, con bastante aire.
+  const globalBounds = fitBoundsFrame(
+    route.cities.map((c) => c.coords),
+    viewport,
+    OUTRO_PAD,
+    { maxZoom: 4.4, minZoom: 1.1 },
+  );
 
   const segs: Segment5[] = [];
   const push = (s: Omit<Segment5, 'from' | 'to'>) => segs.push({ ...s, from: 0, to: 0 });
@@ -136,6 +149,19 @@ export function buildPlan5(
     }
   }
 
+  // Cierre: zoom out desde el último país hasta ver todo el recorrido.
+  const lastCity = route.paisRanges[n - 1].lastCity;
+  push({
+    kind: 'outro',
+    paisIdx: n - 1,
+    paisFromIdx: n - 1,
+    rFrom: lastCity,
+    rTo: lastCity,
+    cityGlobalIdx: lastCity,
+    isClimax: false,
+    w: OUTRO_SVH,
+  });
+
   const total = segs.reduce((a, s) => a + s.w, 0);
   let acc = 0;
   for (const s of segs) {
@@ -144,7 +170,7 @@ export function buildPlan5(
     s.to = acc / total;
   }
 
-  return { segments: segs, totalSvh: total, paisBounds, route, nPaises: n, nCiudades: route.nCiudades };
+  return { segments: segs, totalSvh: total, paisBounds, globalBounds, route, nPaises: n, nCiudades: route.nCiudades };
 }
 
 export function resolveFrame5(plan: JourneyPlan, progress: number): JourneyFrame {
@@ -168,6 +194,24 @@ export function resolveFrame5(plan: JourneyPlan, progress: number): JourneyFrame
       mixTo: seg.paisIdx,
       mixT: 0,
       isClimax: seg.isClimax,
+    };
+  }
+
+  if (seg.kind === 'outro') {
+    const t = easeInOutCubic(local);
+    return {
+      pais: seg.paisIdx,
+      ciudadGlobalIndex: seg.cityGlobalIdx,
+      phase: 'outro',
+      r: seg.cityGlobalIdx, // línea completa; cometa descansa en el destino final
+      holdAmount: 0,
+      cameraMode: 'fly',
+      camTarget: flyLerpFrame(pb[seg.paisIdx], plan.globalBounds, t, 0),
+      camArc: 0,
+      mixFrom: seg.paisIdx,
+      mixTo: seg.paisIdx,
+      mixT: 0,
+      isClimax: false,
     };
   }
 
